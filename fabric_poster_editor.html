@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Poster Editor Pro — Fabric + APIs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Poppins:wght@400;700&family=Roboto:wght@400;700&family=Oswald&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.2.4/fabric.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    :root{--panel:340px}
+    body{margin:0;font-family:Inter,system-ui,Arial;display:flex;height:100vh}
+    #sidebar{width:var(--panel);padding:14px;box-sizing:border-box;border-right:1px solid #e6e6e6;overflow:auto;background:#fbfbfd}
+    #main{flex:1;display:flex;flex-direction:column;background:#f3f6f9}
+    #canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:20px}
+    canvas{border-radius:10px;box-shadow:0 6px 20px rgba(20,20,40,.08)}
+    h3{margin:8px 0}
+    label{font-size:13px;margin:6px 0;display:block}
+    input,select,button{width:100%;padding:8px;border-radius:8px;border:1px solid #ddd;margin-bottom:8px;box-sizing:border-box}
+    .row{display:flex;gap:8px}
+    .small{width:48%}
+    .palette{display:flex;gap:6px}
+    .sw{width:26px;height:26px;border-radius:6px;border:1px solid #bbb}
+    .thumb{width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid transparent}
+    .section{padding-bottom:12px;border-bottom:1px solid #eee;margin-bottom:12px}
+    .chip{display:inline-block;padding:6px 8px;border-radius:999px;background:#fff;border:1px solid #ddd;margin:4px;cursor:pointer}
+    footer{font-size:12px;color:#777;padding:10px}
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>Poster Editor Pro</h2>
+
+    <div class="section">
+      <h3>Canvas / Presets</h3>
+      <select id="presetSize">
+        <option value="1080x1080">1080×1080 Instagram</option>
+        <option value="1080x1350">1080×1350 Instagram Feed</option>
+        <option value="1080x1920">1080×1920 IG Story</option>
+        <option value="1200x630">1200×630 Facebook</option>
+        <option value="5000x5000">5000×5000 Alta</option>
+      </select>
+      <div class="row"><input id="customW" class="small" type="number" placeholder="W"><input id="customH" class="small" type="number" placeholder="H"></div>
+      <button id="applySize">Aplicar tamaño</button>
+    </div>
+
+    <div class="section">
+      <h3>Agregar recursos</h3>
+      <label>Imagen local</label>
+      <input type="file" id="imgFile" accept="image/*">
+      <label>Stickers / GIFs - buscar</label>
+      <div class="row"><input id="giphyQuery" placeholder="buscar stickers (ej: comida)"><button id="searchGiphy">Buscar</button></div>
+      <div id="giphyResults" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+      <label>Fondos libres (Pexels / Pixabay)</label>
+      <div class="row"><input id="bgQuery" placeholder="buscar fondo (ej: playa)"><button id="searchBg">Buscar</button></div>
+      <div id="bgResults" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+
+      <button id="unsplashRandom">Fondo aleatorio (Unsplash)</button>
+    </div>
+
+    <div class="section">
+      <h3>Texto y Tipografías</h3>
+      <input id="newText" placeholder="Texto...">
+      <div class="row"><select id="fontSelect"><option>Montserrat</option><option>Poppins</option><option>Roboto</option><option>Oswald</option></select><input type="color" id="textColor" value="#000000"></div>
+      <div class="row"><button id="addText">Añadir texto</button><button id="addTitle">Añadir título</button></div>
+    </div>
+
+    <div class="section">
+      <h3>Módulo Precio (PROMO / ESPECIAL)</h3>
+      <select id="priceType"><option value="promo">PROMO</option><option value="especial">ESPECIAL</option></select>
+      <input id="priceValue" placeholder="$0.00">
+      <label>Opciones de estilo</label>
+      <div class="row"><input type="color" id="priceBg"><input type="color" id="priceText"></div>
+      <label>Borde</label>
+      <div class="row"><input id="priceBorderColor" type="color"><input id="priceBorderWidth" type="number" placeholder="grosor (px)"></div>
+      <label>Glow</label>
+      <div class="row"><input id="priceGlow" type="color"><input id="priceGlowBlur" type="number" placeholder="blur"></div>
+      <div class="row"><button id="addPrice" class="small">Agregar al lienzo</button><button id="styleReset" class="small">Reset estilo</button></div>
+      <small>Los precios se crean como objetos Fabric editables; puedes personalizar y animar stroke/glow.</small>
+    </div>
+
+    <div class="section">
+      <h3>Paletas y Plantillas</h3>
+      <div id="palettes"></div>
+      <div style="margin-top:8px">
+        <h4>Plantillas rápidas</h4>
+        <img src="https://via.placeholder.com/300x300/ff9a9e/fff?text=Promo" class="thumb" onclick="applyTemplate(this.src)">
+        <img src="https://via.placeholder.com/300x300/9ebdff/fff?text=Evento" class="thumb" onclick="applyTemplate(this.src)">
+        <img src="https://via.placeholder.com/300x300/90ee90/fff?text=Frase" class="thumb" onclick="applyTemplate(this.src)">
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Tendencias / Hashtags</h3>
+      <button id="loadTrends">Cargar tendencias (Google Trends)</button>
+      <div id="trends" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section">
+      <h3>Publicar & Analítica</h3>
+      <label>Facebook / Instagram (Graph API)</label>
+      <button id="fbLogin">Conectar Facebook/Instagram</button>
+      <select id="publishTarget"><option value="page">Mi Página</option><option value="group">Mi Grupo</option><option value="ig">Instagram (Business)</option></select>
+      <button id="publishNow">Publicar ahora</button>
+      <div style="margin-top:8px"><button id="getInsights">Obtener analítica básica</button></div>
+      <div id="insights" style="margin-top:8px;font-size:13px;color:#333"></div>
+    </div>
+
+    <div class="section">
+      <h3>Programación</h3>
+      <input id="scheduleDate" type="datetime-local">
+      <button id="scheduleSave">Programar publicación</button>
+      <div id="scheduleList" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section">
+      <h3>Proyecto</h3>
+      <button id="exportPNG">Exportar PNG</button>
+      <button id="downloadJSON">Guardar proyecto (.json)</button>
+      <input type="file" id="loadProject">
+    </div>
+
+    <footer>
+      ⚠️ Este archivo ya incluye integraciones (placeholders) con APIs reales. Reemplaza las claves/IDs en la sección <code>// CONFIG</code> del script.
+    </footer>
+  </div>
+
+  <div id="main">
+    <div id="canvas-wrap">
+      <canvas id="c" width="1080" height="1080"></canvas>
+    </div>
+  </div>
+
+<script>
+/*******************
+ CONFIG - pega aquí tus claves/ids
+ *******************/
+const CONFIG = {
+  GIPHY_API_KEY: 'vMLdsF9pgKAKr5UlXgeU2f1RGJkJOjBj', // key para Giphy (stickers)
+  PEXELS_API_KEY: 'nFKHPolMRu0x44gbaJG6WJzrbmOBLWXXiTmXLERcnS5QgqxT8BrUtqfl', // key Pexels (fondos)
+  PIXABAY_API_KEY: '51868381-fcdf6c0880e12b9f88b3de941', // key Pixabay (fondos)
+  UNSPLASH_SOURCE: true, // usamos source.unsplash sin key para fondos aleatorios
+  FACEBOOK_APP_ID: 'REEMPLAZAR_FACEBOOK_APP_ID', // FB App ID para OAuth
+  REDIRECT_URI: window.location.origin + window.location.pathname // ajustar según deploy
+};
+
+/*******************
+ Inicializa Fabric
+ *******************/
+const canvas = new fabric.Canvas('c', { preserveObjectStacking:true });
+canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+
+// helpers
+function setCanvasSize(w,h){canvas.setWidth(w);canvas.setHeight(h); document.getElementById('c').width=w; document.getElementById('c').height=h; canvas.calcOffset();}
+
+// presets size
+document.getElementById('applySize').addEventListener('click', ()=>{
+  const preset = document.getElementById('presetSize').value;
+  const [w,h] = preset.split('x').map(Number);
+  const cw = parseInt(document.getElementById('customW').value) || w;
+  const ch = parseInt(document.getElementById('customH').value) || h;
+  setCanvasSize(cw,ch);
+});
+
+/*******************
+ Fonts & Text
+ *******************/
+document.getElementById('addText').addEventListener('click', ()=>{
+  const txt = document.getElementById('newText').value || 'Nuevo texto';
+  const font = document.getElementById('fontSelect').value;
+  const color = document.getElementById('textColor').value;
+  const t = new fabric.Textbox(txt, { left:80, top:80, fontSize:36, fontFamily:font, fill:color, editable:true });
+  canvas.add(t); canvas.setActiveObject(t);
+});
+
+document.getElementById('addTitle').addEventListener('click', ()=>{
+  const font = document.getElementById('fontSelect').value;
+  const t = new fabric.Textbox('TÍTULO', { left:80, top:40, fontSize:64, fontFamily:font, fontWeight:'700' });
+  canvas.add(t); canvas.setActiveObject(t);
+});
+
+/*******************
+ Imagen local
+ *******************/
+document.getElementById('imgFile').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return; const reader=new FileReader();
+  reader.onload = evt => { fabric.Image.fromURL(evt.target.result, img=>{ img.scaleToWidth(Math.min(800, canvas.width*0.8)); canvas.add(img).centerObject(img); canvas.setActiveObject(img); canvas.requestRenderAll(); }); };
+  reader.readAsDataURL(f);
+});
+
+/*******************
+ GIPHY - stickers (busqueda)
+ *******************/
+document.getElementById('searchGiphy').addEventListener('click', async ()=>{
+  const q = document.getElementById('giphyQuery').value || 'sticker';
+  const key = CONFIG.GIPHY_API_KEY;
+  const cont = document.getElementById('giphyResults'); cont.innerHTML='Cargando...';
+  try{
+    const res = await fetch(`https://api.giphy.com/v1/stickers/search?api_key=${key}&q=${encodeURIComponent(q)}&limit=12&rating=pg`);
+    const json = await res.json(); cont.innerHTML='';
+    json.data.forEach(item=>{
+      // prefer static png_preview or downsized_large
+      const url = item.images.fixed_width_small.webp || item.images.fixed_width_small.url;
+      const img = document.createElement('img'); img.src = url; img.style.width='80px'; img.style.cursor='pointer'; img.onclick = ()=>{
+        fabric.Image.fromURL(url, o=>{ o.scaleToWidth(200); canvas.add(o).setActiveObject(o); });
+      };
+      cont.appendChild(img);
+    });
+  }catch(err){cont.innerHTML='Error al buscar Giphy';}
+});
+
+/*******************
+ PEXELS / PIXABAY - fondos
+ *******************/
+document.getElementById('searchBg').addEventListener('click', async ()=>{
+  const q = document.getElementById('bgQuery').value || 'background';
+  const pexKey = CONFIG.PEXELS_API_KEY;
+  const pixKey = CONFIG.PIXABAY_API_KEY;
+  const cont = document.getElementById('bgResults'); cont.innerHTML='Cargando...';
+  cont.innerHTML='';
+  // pexels
+  try{
+    const pex = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=8`, { headers: { Authorization: pexKey }});
+    const pj = await pex.json();
+    pj.photos.forEach(ph=>{
+      const img = document.createElement('img'); img.src = ph.src.medium; img.className='thumb'; img.onclick = ()=>{ fabric.Image.fromURL(ph.src.large, i=>{ canvas.setBackgroundImage(i, canvas.renderAll.bind(canvas), { scaleX: canvas.width/i.width, scaleY: canvas.height/i.height }); }); };
+      cont.appendChild(img);
+    });
+  }catch(e){ /* ignore */ }
+  // pixabay
+  try{
+    const pix = await fetch(`https://pixabay.com/api/?key=${pixKey}&q=${encodeURIComponent(q)}&image_type=photo&per_page=8`);
+    const pj2 = await pix.json();
+    pj2.hits.forEach(h=>{ const img=document.createElement('img'); img.src=h.previewURL; img.className='thumb'; img.onclick=()=>{ fabric.Image.fromURL(h.largeImageURL||h.webformatURL, i=>{ canvas.setBackgroundImage(i, canvas.renderAll.bind(canvas), { scaleX: canvas.width/i.width, scaleY: canvas.height/i.height }); }); }; cont.appendChild(img); });
+  }catch(e){ /* ignore */ }
+  if(cont.innerHTML==='') cont.innerHTML='No se encontraron resultados o faltan claves API.';
+});
+
+/*******************
+ Unsplash simple background
+ *******************/
+document.getElementById('unsplashRandom').addEventListener('click', ()=>{
+  const url = 'https://source.unsplash.com/' + canvas.width + 'x' + canvas.height + '/?food,background';
+  fabric.Image.fromURL(url, img=>{ canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), { scaleX: canvas.width/img.width, scaleY: canvas.height/img.height }); });
+});
+
+/*******************
+ Paletas
+ *******************/
+const palettes = { Instagram:['#405DE6','#5851DB','#833AB4','#C13584','#E1306C','#FD1D1D'], Facebook:['#1877F2','#42b72a','#f0f2f5'], TikTok:['#69C9D0','#EE1D52','#010101'] };
+const palDiv = document.getElementById('palettes');
+Object.entries(palettes).forEach(([k,cols])=>{
+  const el = document.createElement('div'); el.innerHTML=`<b>${k}</b>`;
+  const row = document.createElement('div'); row.className='palette';
+  cols.forEach(c=>{ const s=document.createElement('div'); s.className='sw'; s.style.background=c; s.onclick=()=>canvas.setBackgroundColor(c, canvas.renderAll.bind(canvas)); row.appendChild(s); });
+  el.appendChild(row); palDiv.appendChild(el);
+});
+
+/*******************
+ Plantillas
+ *******************/
+function applyTemplate(src){ fabric.Image.fromURL(src, img=>{ img.scaleToWidth(canvas.width); canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas)); }); }
+
+/*******************
+ Tendencias - Google Trends (RSS)
+ *******************/
+document.getElementById('loadTrends').addEventListener('click', async ()=>{
+  const container = document.getElementById('trends'); container.innerHTML='Cargando...';
+  try{
+    const res = await fetch('https://trends.google.com/trends/trendingsearches/daily/rss?geo=MX');
+    const text = await res.text();
+    const parser = new DOMParser(); const xml = parser.parseFromString(text,'application/xml');
+    const items = [...xml.querySelectorAll('item title')].slice(0,10).map(n=>n.textContent);
+    container.innerHTML='';
+    items.forEach(t=>{ const b=document.createElement('button'); b.className='chip'; b.textContent='#'+t.replace(/\s+/g,''); b.onclick=()=>{ const txt=new fabric.Textbox('#'+t,{left:40,top:40,fontSize:28}); canvas.add(txt); }; container.appendChild(b); });
+  }catch(e){ container.innerHTML='Error cargando tendencias'; }
+});
+
+/*******************
+ Módulo Precio (PROMO / ESPECIAL) - personalizado y con efectos
+ *******************/
+document.getElementById('addPrice').addEventListener('click', ()=>{
+  const type = document.getElementById('priceType').value;
+  const val = document.getElementById('priceValue').value || '$0.00';
+  const bg = document.getElementById('priceBg').value || '#ff3b30';
+  const txt = document.getElementById('priceText').value || '#fff';
+  const border = document.getElementById('priceBorderColor').value || '#000';
+  const borderW = parseInt(document.getElementById('priceBorderWidth').value) || 4;
+  const glowColor = document.getElementById('priceGlow').value || '#ffeb3b';
+  const glowBlur = parseInt(document.getElementById('priceGlowBlur').value) || 16;
+
+  // composicion: un rect + texto encima
+  const rect = new fabric.Rect({ left:120, top:120, width:320, height:120, fill:bg, rx:12, ry:12, stroke:border, strokeWidth:borderW, shadow: { color: glowColor, blur: glowBlur, offsetX:0, offsetY:0 } });
+  const priceText = new fabric.Text(val, { left: 140, top:150, fontSize:48, fontFamily:'Poppins', fill:txt, fontWeight:'700' });
+  const group = new fabric.Group([rect, priceText], { left:80, top:80, selectable:true });
+  canvas.add(group).setActiveObject(group);
+
+  // stroke animado (opcional)
+  let anim = true;
+  (function animateStroke(){ if(!anim) return; rect.animate('strokeWidth', borderW+6, { duration:800, onChange:canvas.renderAll.bind(canvas), onComplete:()=>{ rect.animate('strokeWidth', borderW, { duration:800, onChange:canvas.renderAll.bind(canvas), onComplete:animateStroke }); } }); })();
+});
+
+document.getElementById('styleReset').addEventListener('click', ()=>{ document.getElementById('priceBg').value='#ff3b30'; document.getElementById('priceText').value='#ffffff'; document.getElementById('priceBorderColor').value='#000000'; document.getElementById('priceBorderWidth').value='4'; document.getElementById('priceGlow').value='#ffeb3b'; document.getElementById('priceGlowBlur').value='16'; });
+
+/*******************
+ Publicar en Facebook / Instagram (Graph API) - flujo OAuth + upload
+ Note: requiere que reemplaces APP ID y config, y que la app tenga permisos review si publicas en usuarios reales.
+ *******************/
+let FB_ACCESS_TOKEN = null; // se guardará tras login
+
+function fbLogin(){
+  // Abre el dialogo OAuth de Facebook para obtener access token (implict flow)
+  // Esto es un ejemplo: para producción conviene hacer OAuth en backend
+  const appId = CONFIG.FACEBOOK_APP_ID;
+  const redirect = CONFIG.REDIRECT_URI;
+  const scope = 'pages_show_list,pages_read_engagement,pages_manage_posts,publish_to_groups,instagram_basic,instagram_content_publish';
+  const authUrl = `https://www.facebook.com/v16.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent(scope)}&response_type=token`;
+  const w = window.open(authUrl,'fb_login','width=700,height=600');
+  // User must paste token back — we can also implement a redirect handler to capture token automatically.
+  alert('Se abrirá Facebook para conectar. Tras autorizar, copia el access_token desde la URL (si tu redirect retorna token) y pégalo en el prompt.');
+  setTimeout(()=>{ const token = prompt('Pega aquí el access_token obtenido (si el flujo devuelve token en la url)'); if(token) FB_ACCESS_TOKEN = token; }, 4000);
+}
+
+document.getElementById('fbLogin').addEventListener('click', fbLogin);
+
+async function publishToFacebook(){
+  if(!FB_ACCESS_TOKEN){ alert('Conecta primero Facebook con el botón "Conectar Facebook/Instagram"'); return; }
+  const target = document.getElementById('publishTarget').value;
+  // exporter
+  canvas.discardActiveObject(); canvas.renderAll();
+  const dataURL = canvas.toDataURL({ format:'png', multiplier:1 });
+  // upload image to Facebook - flow: upload image to page/photos? or to IG via /{ig-user-id}/media
+  // For pages: POST /{page-id}/photos with 'published' or 'url' or 'source' (multipart)
+  // This example shows a placeholder: user must supply page-id or group-id
+  const pageId = prompt('Ingresa Page ID (o Group ID según target)');
+  if(!pageId) return;
+
+  // Convert dataURL to blob
+  const blob = dataURLtoBlob(dataURL);
+  const fd = new FormData(); fd.append('access_token', FB_ACCESS_TOKEN); fd.append('source', blob, 'poster.png'); fd.append('caption', 'Publicado desde Poster Editor Pro');
+  let endpoint = `https://graph.facebook.com/v16.0/${pageId}/photos`;
+  if(target === 'ig'){ alert('Para Instagram, la API requiere pasos adicionales y una cuenta Business. Se intentará crear un media object.'); }
+  try{
+    const res = await fetch(endpoint, { method:'POST', body:fd });
+    const json = await res.json(); console.log('publish result', json); alert('Publicación enviada. Revisa la respuesta en consola.');
+  }catch(e){ alert('Error publicando: '+e.message); }
+}
+
+document.getElementById('publishNow').addEventListener('click', publishToFacebook);
+
+function dataURLtoBlob(dataurl){ const parts = dataurl.split(','); const mime = parts[0].match(/:(.*?);/)[1]; const bstr = atob(parts[1]); let n = bstr.length; const u8 = new Uint8Array(n); while(n--){ u8[n] = bstr.charCodeAt(n); } return new Blob([u8], {type:mime}); }
+
+/*******************
+ Analítica básica (ejemplo: page insights) - requiere token y page-id
+ *******************/
+document.getElementById('getInsights').addEventListener('click', async ()=>{
+  if(!FB_ACCESS_TOKEN){ alert('Conecta FB primero'); return; }
+  const pageId = prompt('Ingresa Page ID para obtener insights'); if(!pageId) return;
+  try{
+    const res = await fetch(`https://graph.facebook.com/v16.0/${pageId}/insights?access_token=${FB_ACCESS_TOKEN}`);
+    const j = await res.json(); document.getElementById('insights').textContent = JSON.stringify(j, null, 2);
+  }catch(e){ document.getElementById('insights').textContent = 'Error cargando insights'; }
+});
+
+/*******************
+ Scheduler básico (guarda en localStorage)
+ *******************/
+function renderSchedule(){ const list = JSON.parse(localStorage.getItem('poster_schedule')||'[]'); const el = document.getElementById('scheduleList'); el.innerHTML=''; list.forEach((it,idx)=>{ const d = document.createElement('div'); d.textContent = `${it.datetime} — ${it.note||'Poster programado'}`; const b = document.createElement('button'); b.textContent='Publicar ahora'; b.onclick = ()=>{ /* publicar */ publishToFacebook(); }; const del = document.createElement('button'); del.textContent='Eliminar'; del.onclick=()=>{ list.splice(idx,1); localStorage.setItem('poster_schedule', JSON.stringify(list)); renderSchedule(); }; d.appendChild(b); d.appendChild(del); el.appendChild(d); }); }
+
+document.getElementById('scheduleSave').addEventListener('click', ()=>{
+  const dt = document.getElementById('scheduleDate').value; if(!dt) return alert('Elige fecha');
+  const list = JSON.parse(localStorage.getItem('poster_schedule')||'[]'); list.push({ datetime: dt, note: 'Programado desde Poster Editor' }); localStorage.setItem('poster_schedule', JSON.stringify(list)); renderSchedule(); alert('Programado (nota: este scheduler es local; en producción necesitarás backend para ejecutar tareas).');
+});
+renderSchedule();
+
+/*******************
+ Export y proyecto
+ *******************/
+document.getElementById('exportPNG').addEventListener('click', ()=>{ canvas.discardActiveObject(); canvas.renderAll(); canvas.getElement().toBlob(function(blob){ saveAs(blob,'poster.png'); }); });
+
+document.getElementById('downloadJSON').addEventListener('click', ()=>{ const json=canvas.toJSON(['selectable']); const blob = new Blob([JSON.stringify(json)],{type:'application/json'}); saveAs(blob,'poster-project.json'); });
+document.getElementById('loadProject').addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ canvas.loadFromJSON(ev.target.result, canvas.renderAll.bind(canvas)); }; r.readAsText(f); });
+
+/*******************
+ Carga inicial
+ *******************/
+setCanvasSize(1080,1080);
+canvas.renderAll();
+
+</script>
+
+</body>
+</html>
